@@ -200,6 +200,7 @@ FS-PROJECT/
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - 전체 배포 가이드 (Render, Railway, AWS, Docker)
 - **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - 배포 체크리스트
 - **[배포_문제해결_가이드.md](배포_문제해결_가이드.md)** - ⚡ 배포 후 문제 해결
+- **[AI_기능_오류_해결.md](AI_기능_오류_해결.md)** - 🤖 AI 기능 오류 해결
 
 ## 📝 라이선스
 

@@ -652,6 +652,8 @@ async function handleAIExplain() {
     elements.aiExplanation.style.display = 'none';
     
     try {
+        console.log('🤖 AI 설명 요청 시작...');
+        
         const response = await fetch('/api/explain-financial-statement', {
             method: 'POST',
             headers: {
@@ -661,20 +663,92 @@ async function handleAIExplain() {
                 financial_data: currentFinancialData,
                 company_name: selectedCompany.corp_name,
                 fs_type: elements.fsType.value
-            })
+            }),
+            // 타임아웃 설정 (35초)
+            signal: AbortSignal.timeout(35000)
         });
         
-        const data = await response.json();
+        console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
         
+        // 응답 상태 확인
+        if (!response.ok) {
+            // JSON 파싱 시도
+            let errorData;
+            try {
+                const text = await response.text();
+                console.log('📄 응답 내용:', text.substring(0, 200));
+                
+                // JSON 파싱 시도
+                try {
+                    errorData = JSON.parse(text);
+                } catch (jsonError) {
+                    // JSON이 아닌 경우 (HTML 에러 페이지 등)
+                    throw new Error(`서버 오류 (${response.status}): JSON 형식이 아닌 응답을 받았습니다.`);
+                }
+            } catch (textError) {
+                throw new Error(`서버 오류 (${response.status}): 응답을 읽을 수 없습니다.`);
+            }
+            
+            // 에러 타입별 메시지
+            const errorMsg = errorData.error || '알 수 없는 오류가 발생했습니다.';
+            const errorDetail = errorData.detail ? `\n\n상세: ${errorData.detail}` : '';
+            
+            throw new Error(errorMsg + errorDetail);
+        }
+        
+        // 정상 응답 처리
+        let data;
+        try {
+            const text = await response.text();
+            
+            // 빈 응답 체크
+            if (!text || text.trim().length === 0) {
+                throw new Error('서버에서 빈 응답을 받았습니다.');
+            }
+            
+            // JSON 파싱
+            data = JSON.parse(text);
+            console.log('✅ JSON 파싱 성공');
+            
+        } catch (parseError) {
+            console.error('❌ JSON 파싱 오류:', parseError);
+            throw new Error('서버 응답을 처리할 수 없습니다. 다시 시도해주세요.');
+        }
+        
+        // 데이터 검증
         if (data.error) {
-            showAIError(data.error);
+            const errorMsg = data.error;
+            const errorDetail = data.detail ? `\n\n${data.detail}` : '';
+            showAIError(errorMsg + errorDetail);
             return;
         }
         
+        if (!data.explanation) {
+            showAIError('AI 설명이 생성되지 않았습니다. 다시 시도해주세요.');
+            return;
+        }
+        
+        console.log('✅ AI 설명 생성 완료');
         displayAIExplanation(data.explanation);
         
     } catch (error) {
-        showAIError('AI 설명을 생성하는 중 오류가 발생했습니다: ' + error.message);
+        console.error('❌ AI 설명 생성 오류:', error);
+        
+        // 에러 타입별 메시지
+        let errorMessage;
+        
+        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+            errorMessage = '⏱️ AI 응답 시간이 초과되었습니다.\n\n잠시 후 다시 시도해주세요.';
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage = '🌐 네트워크 연결에 문제가 있습니다.\n\n인터넷 연결을 확인하고 다시 시도해주세요.';
+        } else if (error.message.includes('JSON')) {
+            errorMessage = '⚠️ 서버 응답 형식 오류\n\n' + error.message;
+        } else {
+            errorMessage = '❌ ' + error.message;
+        }
+        
+        showAIError(errorMessage);
+        
     } finally {
         hideAILoading();
     }

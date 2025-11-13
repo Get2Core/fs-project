@@ -448,18 +448,49 @@ def explain_financial_statement():
     Returns:
         JSON: AI 생성 설명
     """
+    # Gemini API 키 확인
     if not gemini_model:
-        return jsonify({'error': 'Gemini API 키가 설정되지 않았습니다. .env 파일에 GEMINI_API_KEY를 추가해주세요.'}), 500
+        print("⚠️ Gemini API 키가 설정되지 않았습니다.")
+        return jsonify({
+            'error': 'Gemini API 키가 설정되지 않았습니다.',
+            'detail': '.env 파일에 GEMINI_API_KEY를 추가해주세요.',
+            'type': 'configuration_error'
+        }), 500
     
     try:
+        # 요청 데이터 파싱
         data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': '요청 데이터가 없습니다.',
+                'type': 'validation_error'
+            }), 400
+        
         financial_data = data.get('financial_data', {})
         company_name = data.get('company_name', '회사')
         fs_type = data.get('fs_type', 'cfs')
+        
+        # 데이터 검증
+        if not financial_data:
+            return jsonify({
+                'error': '재무 데이터가 없습니다.',
+                'type': 'validation_error'
+            }), 400
+        
         fs_type_name = '연결재무제표' if fs_type == 'cfs' else '개별재무제표'
         
+        print(f"📊 AI 설명 생성 시작: {company_name} ({fs_type_name})")
+        
         # 재무 데이터 요약 생성
-        summary = generate_financial_summary(financial_data, fs_type)
+        try:
+            summary = generate_financial_summary(financial_data, fs_type)
+        except Exception as e:
+            print(f"❌ 재무 데이터 요약 생성 오류: {e}")
+            return jsonify({
+                'error': '재무 데이터를 처리할 수 없습니다.',
+                'detail': str(e),
+                'type': 'data_processing_error'
+            }), 500
         
         # Gemini에게 전달할 프롬프트 생성
         prompt = f"""
@@ -476,21 +507,102 @@ def explain_financial_statement():
 
 설명은 친근하고 이해하기 쉬운 언어로 작성해주세요.
 전문용어를 사용할 때는 간단한 설명을 덧붙여주세요.
+최대 1000자 이내로 작성해주세요.
 """
         
-        # Gemini API 호출
-        response = gemini_model.generate_content(prompt)
-        explanation = response.text
-        
-        return jsonify({
-            'explanation': explanation,
-            'company_name': company_name,
-            'summary': summary
-        })
+        # Gemini API 호출 (타임아웃 포함)
+        try:
+            print("🤖 Gemini API 호출 중...")
+            
+            # 생성 설정 (타임아웃 및 토큰 제한)
+            generation_config = {
+                'temperature': 0.7,
+                'top_p': 0.8,
+                'top_k': 40,
+                'max_output_tokens': 2048,
+            }
+            
+            response = gemini_model.generate_content(
+                prompt,
+                generation_config=generation_config,
+                request_options={'timeout': 30}  # 30초 타임아웃
+            )
+            
+            # 응답 검증
+            if not response or not hasattr(response, 'text'):
+                print("❌ Gemini API 응답이 올바르지 않습니다.")
+                return jsonify({
+                    'error': 'AI 응답을 생성할 수 없습니다.',
+                    'detail': 'API 응답이 비어있습니다.',
+                    'type': 'api_error'
+                }), 500
+            
+            explanation = response.text
+            
+            # 응답 길이 체크
+            if not explanation or len(explanation.strip()) < 10:
+                print("⚠️ Gemini 응답이 너무 짧습니다.")
+                return jsonify({
+                    'error': 'AI 설명이 생성되지 않았습니다.',
+                    'detail': '응답이 너무 짧거나 비어있습니다.',
+                    'type': 'api_error'
+                }), 500
+            
+            print(f"✅ AI 설명 생성 완료 (길이: {len(explanation)}자)")
+            
+            return jsonify({
+                'success': True,
+                'explanation': explanation,
+                'company_name': company_name,
+                'fs_type': fs_type_name,
+                'summary': summary[:500] + '...' if len(summary) > 500 else summary  # 요약 길이 제한
+            })
+            
+        except TimeoutError:
+            print("❌ Gemini API 타임아웃")
+            return jsonify({
+                'error': 'AI 응답 시간이 초과되었습니다.',
+                'detail': '30초 이내에 응답을 받지 못했습니다. 다시 시도해주세요.',
+                'type': 'timeout_error'
+            }), 504
+            
+        except Exception as api_error:
+            print(f"❌ Gemini API 호출 오류: {api_error}")
+            error_msg = str(api_error)
+            
+            # API 키 오류 감지
+            if 'API_KEY' in error_msg.upper() or 'INVALID' in error_msg.upper():
+                return jsonify({
+                    'error': 'Gemini API 키가 유효하지 않습니다.',
+                    'detail': 'API 키를 확인하고 다시 설정해주세요.',
+                    'type': 'authentication_error'
+                }), 401
+            
+            # 할당량 초과 오류
+            if 'QUOTA' in error_msg.upper() or 'RATE_LIMIT' in error_msg.upper():
+                return jsonify({
+                    'error': 'API 사용 한도를 초과했습니다.',
+                    'detail': '잠시 후 다시 시도해주세요.',
+                    'type': 'quota_error'
+                }), 429
+            
+            # 기타 API 오류
+            return jsonify({
+                'error': 'AI 서비스 오류가 발생했습니다.',
+                'detail': error_msg,
+                'type': 'api_error'
+            }), 500
         
     except Exception as e:
-        print(f"❌ AI 설명 생성 오류: {e}")
-        return jsonify({'error': f'AI 설명 생성 중 오류가 발생했습니다: {str(e)}'}), 500
+        print(f"❌ AI 설명 생성 중 예상치 못한 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'error': 'AI 설명 생성 중 오류가 발생했습니다.',
+            'detail': str(e),
+            'type': 'internal_error'
+        }), 500
 
 
 def generate_financial_summary(financial_data, fs_type):
