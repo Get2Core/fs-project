@@ -45,23 +45,51 @@ companies_db = []
 def load_companies_db():
     """
     회사 코드 데이터를 메모리에 로드합니다.
+    파일이 없으면 다운로드를 시도합니다.
     """
     global companies_db
     
+    # 파일이 없으면 다운로드 시도
     if not CORP_CODES_FILE.exists():
         print("⚠️ 경고: corp_codes.json 파일이 없습니다.")
-        print("   먼저 'python download_corp_code.py'를 실행하세요.")
-        return False
+        print("   자동으로 다운로드를 시도합니다...")
+        
+        try:
+            # download_corp_code.py의 main 함수 실행
+            import subprocess
+            result = subprocess.run(
+                ['python', 'download_corp_code.py'],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                print(f"❌ 다운로드 실패: {result.stderr}")
+                return False
+            
+            print("✅ 회사 데이터 다운로드 완료")
+            
+        except Exception as e:
+            print(f"❌ 다운로드 오류: {e}")
+            return False
     
+    # 파일 로드
     try:
         with open(CORP_CODES_FILE, 'r', encoding='utf-8') as f:
             companies_db = json.load(f)
+        
+        if len(companies_db) == 0:
+            print("⚠️ 경고: 회사 데이터가 비어있습니다.")
+            return False
         
         print(f"✅ {len(companies_db):,}개의 회사 정보를 로드했습니다.")
         return True
         
     except Exception as e:
         print(f"❌ 회사 데이터 로드 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -91,14 +119,21 @@ def search_company():
     if not keyword:
         return jsonify({'error': '검색어를 입력해주세요.'}), 400
     
+    # 데이터가 로드되지 않았다면 다시 시도
     if not companies_db:
-        return jsonify({'error': '회사 데이터가 로드되지 않았습니다.'}), 500
+        print("⚠️ 회사 데이터가 로드되지 않았습니다. 재시도 중...")
+        if not load_companies_db():
+            return jsonify({
+                'error': '회사 데이터를 불러올 수 없습니다.',
+                'detail': 'corp_codes.json 파일이 없거나 손상되었습니다. 로그를 확인해주세요.',
+                'suggestion': '환경 변수 OPENDART_API_KEY가 올바르게 설정되었는지 확인하세요.'
+            }), 500
     
     # 회사명 또는 종목코드로 검색
     results = []
     for company in companies_db:
-        corp_name = company['corp_name'].lower()
-        stock_code = company['stock_code'].lower()
+        corp_name = company.get('corp_name', '').lower()
+        stock_code = company.get('stock_code', '').lower()
         
         if keyword in corp_name or keyword in stock_code:
             results.append({
@@ -557,12 +592,58 @@ def health_check():
     """
     서버 상태 체크 API
     """
-    return jsonify({
-        'status': 'ok',
+    health_status = {
+        'status': 'ok' if companies_db else 'warning',
         'companies_loaded': len(companies_db),
         'api_key_configured': bool(OPENDART_API_KEY),
-        'gemini_configured': bool(GEMINI_API_KEY)
-    })
+        'gemini_configured': bool(GEMINI_API_KEY),
+        'data_file_exists': CORP_CODES_FILE.exists()
+    }
+    
+    # 경고 메시지 추가
+    if not companies_db:
+        health_status['warning'] = '회사 데이터가 로드되지 않았습니다.'
+        health_status['action'] = 'download_corp_code.py를 실행하거나 OPENDART_API_KEY를 확인하세요.'
+    
+    if not OPENDART_API_KEY:
+        health_status['error'] = 'OPENDART_API_KEY가 설정되지 않았습니다.'
+    
+    return jsonify(health_status)
+
+
+@app.route('/api/reload-data', methods=['POST'])
+def reload_data():
+    """
+    회사 데이터를 수동으로 다시 로드하는 API
+    디버깅 및 긴급 복구용
+    """
+    try:
+        print("🔄 수동 데이터 재로드 요청...")
+        
+        # 기존 데이터 초기화
+        global companies_db
+        companies_db = []
+        
+        # 데이터 재로드 시도
+        if load_companies_db():
+            return jsonify({
+                'success': True,
+                'message': f'{len(companies_db):,}개의 회사 정보를 로드했습니다.',
+                'companies_loaded': len(companies_db)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '데이터 로드 실패',
+                'companies_loaded': 0
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'오류 발생: {str(e)}',
+            'companies_loaded': 0
+        }), 500
 
 
 if __name__ == '__main__':
