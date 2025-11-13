@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+
+# 환경 변수
+.env
+.env.local
+.env.*.local
+
+# 데이터 (빌드 시 다운로드)
+data/
+*.zip
+*.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 문서
+README.md
+*.md
+LICENSE
+
+# 테스트
+tests/
+*.test.py
+pytest_cache/
+
+# 로그
+*.log
+logs/
+
+# 기타
+.coverage
+htmlcov/
+.pytest_cache/
+
