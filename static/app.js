@@ -53,8 +53,8 @@ function initializeYearSelector() {
  * 이벤트 리스너 등록
  */
 function attachEventListeners() {
-    // 회사 검색
-    elements.companySearch.addEventListener('input', debounce(handleCompanySearch, 300));
+    // 회사 검색 (150ms debounce로 검색 속도 개선)
+    elements.companySearch.addEventListener('input', debounce(handleCompanySearch, 150));
     
     // 검색 결과 외부 클릭 시 닫기
     document.addEventListener('click', (e) => {
@@ -91,7 +91,7 @@ function debounce(func, wait) {
 }
 
 /**
- * 회사 검색 처리
+ * 회사 검색 처리 (검색 결과 50개로 증가)
  */
 async function handleCompanySearch(e) {
     const keyword = e.target.value.trim();
@@ -102,7 +102,8 @@ async function handleCompanySearch(e) {
     }
     
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(keyword)}&limit=10`);
+        // 검색 결과를 50개로 증가하여 더 많은 회사를 찾을 수 있도록 개선
+        const response = await fetch(`/api/search?q=${encodeURIComponent(keyword)}&limit=50`);
         const companies = await response.json();
         
         if (companies.error) {
@@ -118,16 +119,24 @@ async function handleCompanySearch(e) {
 }
 
 /**
- * 검색 결과 표시
+ * 검색 결과 표시 (스크롤 가능, 결과 개수 표시)
  */
 function displaySearchResults(companies) {
     if (companies.length === 0) {
-        elements.searchResults.innerHTML = '<div class="search-result-item">검색 결과가 없습니다.</div>';
+        elements.searchResults.innerHTML = '<div class="search-result-item no-result">검색 결과가 없습니다.</div>';
         elements.searchResults.classList.add('active');
         return;
     }
     
-    elements.searchResults.innerHTML = companies.map(company => `
+    // 결과 개수 표시 헤더 추가
+    const headerHtml = `
+        <div class="search-results-header">
+            <span class="results-count">검색 결과: ${companies.length}개</span>
+            ${companies.length >= 50 ? '<span class="results-hint">⬇️ 스크롤하여 더 보기</span>' : ''}
+        </div>
+    `;
+    
+    const itemsHtml = companies.map(company => `
         <div class="search-result-item" data-company='${JSON.stringify(company)}'>
             <span class="result-name">${company.corp_name}</span>
             ${company.stock_code ? `<span class="result-code">(${company.stock_code})</span>` : ''}
@@ -137,6 +146,7 @@ function displaySearchResults(companies) {
         </div>
     `).join('');
     
+    elements.searchResults.innerHTML = headerHtml + itemsHtml;
     elements.searchResults.classList.add('active');
     
     // 검색 결과 클릭 이벤트
@@ -664,8 +674,8 @@ async function handleAIExplain() {
                 company_name: selectedCompany.corp_name,
                 fs_type: elements.fsType.value
             }),
-            // 타임아웃 설정 (35초)
-            signal: AbortSignal.timeout(35000)
+            // 타임아웃 설정 (50초 - 서버 재시도 로직 대응)
+            signal: AbortSignal.timeout(50000)
         });
         
         console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
@@ -728,7 +738,13 @@ async function handleAIExplain() {
             return;
         }
         
-        console.log('✅ AI 설명 생성 완료');
+        // 재시도 횟수 로깅 (디버깅용)
+        if (data.retry_count > 0) {
+            console.log(`✅ AI 설명 생성 완료 (${data.retry_count}번 재시도 후 성공)`);
+        } else {
+            console.log('✅ AI 설명 생성 완료');
+        }
+        
         displayAIExplanation(data.explanation);
         
     } catch (error) {
@@ -738,7 +754,7 @@ async function handleAIExplain() {
         let errorMessage;
         
         if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-            errorMessage = '⏱️ AI 응답 시간이 초과되었습니다.\n\n잠시 후 다시 시도해주세요.';
+            errorMessage = '⏱️ AI 응답 시간이 초과되었습니다.\n\n서버가 자동으로 재시도했지만 실패했습니다. 네트워크 상태를 확인하고 잠시 후 다시 시도해주세요.';
         } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
             errorMessage = '🌐 네트워크 연결에 문제가 있습니다.\n\n인터넷 연결을 확인하고 다시 시도해주세요.';
         } else if (error.message.includes('JSON')) {

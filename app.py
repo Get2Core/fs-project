@@ -9,6 +9,7 @@
 
 import os
 import json
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
@@ -108,13 +109,13 @@ def search_company():
     
     Query Parameters:
         q (str): 검색 키워드
-        limit (int): 최대 결과 수 (기본값: 10)
+        limit (int): 최대 결과 수 (기본값: 50, 최대: 100)
     
     Returns:
         JSON: 검색 결과 리스트
     """
     keyword = request.args.get('q', '').strip().lower()
-    limit = int(request.args.get('limit', 10))
+    limit = min(int(request.args.get('limit', 50)), 100)  # 최대 100개로 제한
     
     if not keyword:
         return jsonify({'error': '검색어를 입력해주세요.'}), 400
@@ -510,88 +511,112 @@ def explain_financial_statement():
 최대 1000자 이내로 작성해주세요.
 """
         
-        # Gemini API 호출 (타임아웃 포함)
-        try:
-            print("🤖 Gemini API 호출 중...")
-            
-            # 생성 설정 (타임아웃 및 토큰 제한)
-            generation_config = {
-                'temperature': 0.7,
-                'top_p': 0.8,
-                'top_k': 40,
-                'max_output_tokens': 2048,
-            }
-            
-            response = gemini_model.generate_content(
-                prompt,
-                generation_config=generation_config,
-                request_options={'timeout': 30}  # 30초 타임아웃
-            )
-            
-            # 응답 검증
-            if not response or not hasattr(response, 'text'):
-                print("❌ Gemini API 응답이 올바르지 않습니다.")
+        # Gemini API 호출 (재시도 로직 포함)
+        max_retries = 3
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < max_retries:
+            try:
+                if retry_count > 0:
+                    # Exponential backoff: 2^retry_count 초 대기
+                    wait_time = 2 ** retry_count
+                    print(f"🔄 재시도 {retry_count}/{max_retries - 1} - {wait_time}초 대기 중...")
+                    time.sleep(wait_time)
+                
+                print(f"🤖 Gemini API 호출 중... (시도 {retry_count + 1}/{max_retries})")
+                
+                # 생성 설정 (타임아웃 및 토큰 제한)
+                generation_config = {
+                    'temperature': 0.7,
+                    'top_p': 0.8,
+                    'top_k': 40,
+                    'max_output_tokens': 2048,
+                }
+                
+                response = gemini_model.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    request_options={'timeout': 45}  # 45초 타임아웃 (증가)
+                )
+                
+                # 응답 검증
+                if not response or not hasattr(response, 'text'):
+                    raise ValueError('API 응답이 비어있습니다.')
+                
+                explanation = response.text
+                
+                # 응답 길이 체크
+                if not explanation or len(explanation.strip()) < 10:
+                    raise ValueError('응답이 너무 짧거나 비어있습니다.')
+                
+                print(f"✅ AI 설명 생성 완료 (길이: {len(explanation)}자)")
+                
                 return jsonify({
-                    'error': 'AI 응답을 생성할 수 없습니다.',
-                    'detail': 'API 응답이 비어있습니다.',
-                    'type': 'api_error'
-                }), 500
-            
-            explanation = response.text
-            
-            # 응답 길이 체크
-            if not explanation or len(explanation.strip()) < 10:
-                print("⚠️ Gemini 응답이 너무 짧습니다.")
-                return jsonify({
-                    'error': 'AI 설명이 생성되지 않았습니다.',
-                    'detail': '응답이 너무 짧거나 비어있습니다.',
-                    'type': 'api_error'
-                }), 500
-            
-            print(f"✅ AI 설명 생성 완료 (길이: {len(explanation)}자)")
-            
-            return jsonify({
-                'success': True,
-                'explanation': explanation,
-                'company_name': company_name,
-                'fs_type': fs_type_name,
-                'summary': summary[:500] + '...' if len(summary) > 500 else summary  # 요약 길이 제한
-            })
-            
-        except TimeoutError:
-            print("❌ Gemini API 타임아웃")
-            return jsonify({
-                'error': 'AI 응답 시간이 초과되었습니다.',
-                'detail': '30초 이내에 응답을 받지 못했습니다. 다시 시도해주세요.',
-                'type': 'timeout_error'
-            }), 504
-            
-        except Exception as api_error:
-            print(f"❌ Gemini API 호출 오류: {api_error}")
-            error_msg = str(api_error)
-            
-            # API 키 오류 감지
-            if 'API_KEY' in error_msg.upper() or 'INVALID' in error_msg.upper():
-                return jsonify({
-                    'error': 'Gemini API 키가 유효하지 않습니다.',
-                    'detail': 'API 키를 확인하고 다시 설정해주세요.',
-                    'type': 'authentication_error'
-                }), 401
-            
-            # 할당량 초과 오류
-            if 'QUOTA' in error_msg.upper() or 'RATE_LIMIT' in error_msg.upper():
-                return jsonify({
-                    'error': 'API 사용 한도를 초과했습니다.',
-                    'detail': '잠시 후 다시 시도해주세요.',
-                    'type': 'quota_error'
-                }), 429
-            
-            # 기타 API 오류
-            return jsonify({
-                'error': 'AI 서비스 오류가 발생했습니다.',
-                'detail': error_msg,
-                'type': 'api_error'
-            }), 500
+                    'success': True,
+                    'explanation': explanation,
+                    'company_name': company_name,
+                    'fs_type': fs_type_name,
+                    'summary': summary[:500] + '...' if len(summary) > 500 else summary,
+                    'retry_count': retry_count  # 재시도 횟수 포함
+                })
+                
+            except TimeoutError as timeout_error:
+                last_error = timeout_error
+                print(f"⏱️ Gemini API 타임아웃 (시도 {retry_count + 1}/{max_retries})")
+                retry_count += 1
+                
+                if retry_count >= max_retries:
+                    print("❌ 최대 재시도 횟수 초과")
+                    return jsonify({
+                        'error': 'AI 응답 시간이 초과되었습니다.',
+                        'detail': f'{max_retries}번 시도했지만 45초 이내에 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
+                        'type': 'timeout_error',
+                        'retry_count': retry_count
+                    }), 504
+                
+            except Exception as api_error:
+                last_error = api_error
+                error_msg = str(api_error)
+                print(f"❌ Gemini API 호출 오류 (시도 {retry_count + 1}/{max_retries}): {error_msg}")
+                
+                # API 키 오류 - 재시도 불필요
+                if 'API_KEY' in error_msg.upper() or 'INVALID' in error_msg.upper() or 'AUTHENTICATION' in error_msg.upper():
+                    print("🔑 API 키 오류 감지 - 재시도 중단")
+                    return jsonify({
+                        'error': 'Gemini API 키가 유효하지 않습니다.',
+                        'detail': 'API 키를 확인하고 다시 설정해주세요.',
+                        'type': 'authentication_error'
+                    }), 401
+                
+                # 할당량 초과 오류 - 재시도 불필요
+                if 'QUOTA' in error_msg.upper() or 'RATE_LIMIT' in error_msg.upper():
+                    print("📊 할당량 초과 오류 감지 - 재시도 중단")
+                    return jsonify({
+                        'error': 'API 사용 한도를 초과했습니다.',
+                        'detail': '잠시 후 다시 시도해주세요.',
+                        'type': 'quota_error'
+                    }), 429
+                
+                # 기타 오류 - 재시도 가능
+                retry_count += 1
+                
+                if retry_count >= max_retries:
+                    print("❌ 최대 재시도 횟수 초과")
+                    return jsonify({
+                        'error': 'AI 서비스 오류가 발생했습니다.',
+                        'detail': f'{max_retries}번 시도했지만 실패했습니다: {error_msg}',
+                        'type': 'api_error',
+                        'retry_count': retry_count
+                    }), 500
+        
+        # 여기에 도달하면 모든 재시도 실패
+        print(f"❌ 모든 재시도 실패: {last_error}")
+        return jsonify({
+            'error': 'AI 설명 생성에 실패했습니다.',
+            'detail': f'모든 재시도가 실패했습니다. 마지막 오류: {str(last_error)}',
+            'type': 'api_error'
+        }), 500
         
     except Exception as e:
         print(f"❌ AI 설명 생성 중 예상치 못한 오류: {e}")
