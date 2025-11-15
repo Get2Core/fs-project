@@ -27,11 +27,18 @@ dist/
 build/
 *.log
 
-# OpenDart 다운로드 파일
-data/
-*.zip
-*.xml
-corpCode.json
-corp_codes.csv
+# OpenDart 다운로드 파일 (data 디렉토리는 포함, 내용물만 제외)
+data/*.zip
+data/*.xml
+data/*.json
+data/*.csv
+data/*.db
+
+# 로그 파일
+ai_error_log.txt
+*.log
+
+# 테스트 파일
+test_ai_explanation.html
 
 

@@ -415,7 +415,14 @@ select:focus {
     /* 긴 단어나 URL이 잘리지 않도록 */
     word-break: break-word;
     overflow-wrap: break-word;
-    white-space: pre-wrap;
+    /* 줄바꿈 처리 */
+    white-space: normal;
+    /* 내용이 절대 잘리지 않도록 - 모든 제한 제거! */
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    /* 숨김 없음 */
+    display: block !important;
 }
 
 .explanation-content p {

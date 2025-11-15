@@ -17,6 +17,14 @@
 
 ## 1. 배포 전 준비사항
 
+### ⚡ 중요: SQLite 버전 배포
+
+이 애플리케이션은 **SQLite 데이터베이스**를 사용하여 메모리 효율성과 검색 속도가 크게 개선되었습니다.
+
+**배포 시 추가 단계:**
+1. CSV 데이터 다운로드: `python download_corp_code.py`
+2. **SQLite DB 생성**: `python init_db.py` ← 필수!
+
 ### 1.1 필수 확인사항
 
 #### ✅ API 키 준비
@@ -28,7 +36,7 @@
 # Git 초기화 (아직 안 했다면)
 git init
 git add .
-git commit -m "Initial commit: Financial Statement Visualization App"
+git commit -m "Initial commit: Financial Statement Visualization App (SQLite)"
 
 # GitHub에 푸시 (새 저장소 생성 후)
 git remote add origin https://github.com/your-username/your-repo.git
@@ -39,13 +47,16 @@ git push -u origin main
 #### ✅ 프로젝트 구조 확인
 ```
 FS-PROJECT/
-├── app.py                 # Flask 앱 (필수)
+├── app.py                 # ⚡ Flask 앱 (SQLite 버전, 필수)
+├── init_db.py            # ⚡ SQLite DB 초기화 스크립트 (필수!)
+├── download_corp_code.py  # OpenDart 다운로드 (필수)
 ├── requirements.txt       # Python 의존성 (필수)
 ├── .gitignore            # Git 제외 파일
 ├── runtime.txt           # Python 버전 지정 (권장)
 ├── Procfile              # 서버 실행 명령 (일부 플랫폼)
 ├── data/                 # 데이터 디렉토리
-│   └── corp_codes.json   # 회사 코드 (자동 생성)
+│   ├── corp_codes.csv    # CSV 데이터 (중간 파일)
+│   └── corp_codes.db     # ⚡ SQLite DB (자동 생성)
 ├── static/               # 정적 파일
 │   ├── style.css
 │   └── app.js
@@ -85,9 +96,11 @@ FS-PROJECT/
 | **Branch** | `main` |
 | **Root Directory** | (비워둠) |
 | **Runtime** | `Python 3` |
-| **Build Command** | `pip install -r requirements.txt && python download_corp_code.py` |
+| **Build Command** | `pip install -r requirements.txt && python download_corp_code.py && python init_db.py` |
 | **Start Command** | `gunicorn app:app` |
 | **Instance Type** | `Free` |
+
+**⚡ 중요**: Build Command에 `&& python init_db.py`가 추가되어 SQLite 데이터베이스를 자동으로 생성합니다.
 
 #### Step 4: 환경 변수 설정
 

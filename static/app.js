@@ -771,24 +771,80 @@ async function handleAIExplain() {
 }
 
 /**
- * AI 설명 표시
+ * AI 설명 표시 (초단순 안전 렌더링 - 텍스트 손실 없음!)
  */
 function displayAIExplanation(explanation) {
     const content = elements.aiExplanation.querySelector('.explanation-content');
     
-    // Markdown 스타일 텍스트를 HTML로 변환 (간단한 변환)
-    let formattedText = explanation
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **굵게** -> <strong>
-        .replace(/\n\n/g, '</p><p>')  // 단락 구분
-        .replace(/\n/g, '<br>');  // 줄바꿈
+    console.log('='.repeat(80));
+    console.log('📝 AI 설명 렌더링 시작');
+    console.log('📏 원본 길이:', explanation.length, '자');
+    console.log('📄 원본 처음 200자:', explanation.substring(0, 200));
+    console.log('📄 원본 마지막 200자:', explanation.substring(explanation.length - 200));
     
-    formattedText = '<p>' + formattedText + '</p>';
+    // ✨ 초단순 방식: textContent로 먼저 삽입 (100% 안전)
+    // 이렇게 하면 모든 텍스트가 손실 없이 DOM에 들어감!
+    content.textContent = explanation;
     
-    content.innerHTML = formattedText;
+    // 그 다음 innerHTML을 사용해서 마크다운만 변환
+    // 이미 DOM에 안전하게 들어간 텍스트를 가져와서 변환
+    let safeText = content.innerHTML;  // 이미 이스케이프된 안전한 HTML
+    
+    console.log('🔒 안전하게 이스케이프된 길이:', safeText.length);
+    
+    // **굵은글씨** 변환 (이미 이스케이프된 상태에서)
+    let boldCount = 0;
+    safeText = safeText.replace(/\*\*([^*]+)\*\*/g, function(match, content) {
+        boldCount++;
+        return '<strong>' + content + '</strong>';
+    });
+    
+    console.log('🔤 굵은글씨 변환:', boldCount + '개');
+    
+    // 줄바꿈 변환 (\n\n → 단락, \n → <br>)
+    safeText = safeText
+        .replace(/\n\n+/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+    
+    // 단락으로 감싸기
+    safeText = '<p>' + safeText + '</p>';
+    
+    // 빈 단락 제거
+    safeText = safeText.replace(/<p>\s*<\/p>/g, '');
+    
+    console.log('✅ 최종 HTML 길이:', safeText.length);
+    console.log('🎨 최종 처음 300자:', safeText.substring(0, 300));
+    console.log('🎨 최종 마지막 300자:', safeText.substring(safeText.length - 300));
+    
+    // 최종 HTML 삽입
+    content.innerHTML = safeText;
     elements.aiExplanation.style.display = 'block';
     
-    // AI 설명 섹션으로 스크롤
-    elements.aiExplanation.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // 검증: DOM에 실제로 들어간 텍스트 확인
+    const finalText = content.textContent;
+    console.log('🌐 DOM 최종 렌더링 길이:', finalText.length, '자');
+    console.log('🌐 DOM 처음 200자:', finalText.substring(0, 200));
+    console.log('🌐 DOM 마지막 200자:', finalText.substring(finalText.length - 200));
+    
+    // 원본과 비교
+    const originalLength = explanation.length;
+    const finalLength = finalText.length;
+    const diff = originalLength - finalLength;
+    
+    if (Math.abs(diff) > 10) {
+        console.warn('⚠️ 원본과 렌더링 길이 차이:', diff, '자');
+        console.warn('   원본:', originalLength, '자');
+        console.warn('   DOM:', finalLength, '자');
+    } else {
+        console.log('✅ 원본과 DOM 길이 일치 확인 (차이:', diff, '자)');
+    }
+    
+    console.log('='.repeat(80));
+    
+    // 부드럽게 스크롤
+    setTimeout(() => {
+        elements.aiExplanation.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
 }
 
 /**
