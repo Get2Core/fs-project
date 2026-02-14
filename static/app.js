@@ -250,6 +250,13 @@ function displayFinancialData(data) {
     elements.chartsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// 창 크기 조절 시 차트 리사이즈 처리 (필요한 경우)
+window.addEventListener('resize', debounce(() => {
+    Object.values(charts).forEach(chart => {
+        if (chart) chart.resize();
+    });
+}, 250));
+
 /**
  * 재무상태표 차트 생성 (5개 연도)
  */
