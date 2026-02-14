@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <!-- 헤더 -->
@@ -19,12 +21,7 @@
         <section class="search-section">
             <div class="search-box">
                 <label for="company-search">회사명 검색</label>
-                <input 
-                    type="text" 
-                    id="company-search" 
-                    placeholder="예: 삼성전자, 현대차, 005930"
-                    autocomplete="off"
-                >
+                <input type="text" id="company-search" placeholder="예: 삼성전자, 현대차, 005930" autocomplete="off">
                 <div id="search-results" class="search-results"></div>
             </div>
 
@@ -71,98 +68,99 @@
                 <span id="stock-code"></span>
             </div>
         </div>
-171: 
-172:         <!-- 주식 차트 섹션 (네이버 금융 이미지) -->
-173:         <section id="stock-chart-section" class="stock-chart-section" style="display: none;">
-174:             <h2>📊 주가 차트 (1년)</h2>
-175:             <div class="stock-chart-container">
-176:                 <img id="stock-chart-image" src="" alt="주가 차트">
-177:             </div>
-178:         </section>
+    </div>
 
-        <!-- 로딩 스피너 -->
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>재무 데이터를 가져오는 중...</p>
-        </div>
+    <!-- 로딩 스피너 -->
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>재무 데이터를 가져오는 중...</p>
+    </div>
 
-        <!-- 에러 메시지 -->
-        <div id="error-message" class="error-message" style="display: none;"></div>
+    <!-- 에러 메시지 -->
+    <div id="error-message" class="error-message" style="display: none;"></div>
 
-        <!-- 차트 섹션 -->
-        <div id="charts-container" style="display: none;">
-            <!-- AI 설명 섹션 -->
-            <section class="ai-section">
-                <div class="ai-header">
-                    <h2>🤖 AI 재무 분석</h2>
-                    <button id="ai-explain-btn" class="btn-ai">
-                        <span class="btn-text">AI로 쉽게 설명받기</span>
-                        <span class="ai-loader" style="display: none;"></span>
-                    </button>
-                </div>
-                <div id="ai-explanation" class="ai-explanation" style="display: none;">
-                    <div class="explanation-content"></div>
-                </div>
-                <div id="ai-error" class="ai-error" style="display: none;"></div>
-            </section>
+    <!-- 차트 섹션 -->
+    <div id="charts-container" style="display: none;">
+        <!-- AI 설명 섹션 -->
+        <section class="ai-section">
+            <div class="ai-header">
+                <h2>🤖 AI 재무 분석</h2>
+                <button id="ai-explain-btn" class="btn-ai">
+                    <span class="btn-text">AI로 쉽게 설명받기</span>
+                    <span class="ai-loader" style="display: none;"></span>
+                </button>
+            </div>
+            <div id="ai-explanation" class="ai-explanation" style="display: none;">
+                <div class="explanation-content"></div>
+            </div>
+            <div id="ai-error" class="ai-error" style="display: none;"></div>
+        </section>
 
-            <!-- 재무상태표 차트 -->
-            <section class="chart-section">
-                <h2>📈 재무상태표 (Balance Sheet)</h2>
-                <div class="chart-wrapper">
-                    <canvas id="balance-sheet-chart"></canvas>
-                </div>
-            </section>
+        <!-- 재무상태표 차트 -->
+        <section class="chart-section">
+            <h2>📈 재무상태표 (Balance Sheet)</h2>
+            <div class="chart-wrapper">
+                <canvas id="balance-sheet-chart"></canvas>
+            </div>
+        </section>
 
-            <!-- 손익계산서 차트 -->
-            <section class="chart-section">
-                <h2>💰 손익계산서 (Income Statement)</h2>
-                <div class="chart-wrapper">
-                    <canvas id="income-statement-chart"></canvas>
-                </div>
-            </section>
+        <!-- 손익계산서 차트 -->
+        <section class="chart-section">
+            <h2>💰 손익계산서 (Income Statement)</h2>
+            <div class="chart-wrapper">
+                <canvas id="income-statement-chart"></canvas>
+            </div>
+        </section>
 
-            <!-- 추세 비교 차트 -->
-            <section class="chart-section">
-                <h2>📉 연도별 추이</h2>
-                <div class="chart-wrapper">
-                    <canvas id="trend-chart"></canvas>
-                </div>
-            </section>
+        <!-- 추세 비교 차트 -->
+        <section class="chart-section">
+            <h2>📉 연도별 추이</h2>
+            <div class="chart-wrapper">
+                <canvas id="trend-chart"></canvas>
+            </div>
+        </section>
 
-            <!-- 데이터 테이블 -->
-            <section class="table-section">
-                <h2>📋 상세 데이터</h2>
-                <div class="table-tabs">
-                    <button class="tab-btn active" data-tab="balance-sheet">재무상태표</button>
-                    <button class="tab-btn" data-tab="income-statement">손익계산서</button>
-                </div>
-                <div class="table-wrapper">
-                    <table id="data-table">
-                        <thead>
-                            <tr>
-                                <th>계정명</th>
-                                <th class="amount-col">당기</th>
-                                <th class="amount-col">전기</th>
-                                <th class="amount-col">전전기</th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body">
-                            <!-- JavaScript로 동적 생성 -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
+        <!-- 데이터 테이블 -->
+        <section class="table-section">
+            <h2>📋 상세 데이터</h2>
+            <div class="table-tabs">
+                <button class="tab-btn active" data-tab="balance-sheet">재무상태표</button>
+                <button class="tab-btn" data-tab="income-statement">손익계산서</button>
+            </div>
+            <div class="table-wrapper">
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th>계정명</th>
+                            <th class="amount-col">당기</th>
+                            <th class="amount-col">전기</th>
+                            <th class="amount-col">전전기</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- JavaScript로 동적 생성 -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-        <!-- 푸터 -->
-        <footer>
-            <p>데이터 출처: <a href="https://opendart.fss.or.kr/" target="_blank">금융감독원 전자공시시스템 (OpenDart)</a></p>
-            <p class="note">※ 본 데이터는 참고용이며, 투자 판단의 근거로 사용하지 마세요.</p>
-        </footer>
+        <!-- 주식 차트 섹션 (네이버 금융 이미지) -->
+        <section id="stock-chart-section" class="stock-chart-section" style="display: none;">
+            <h2>📊 주가 차트 (1년)</h2>
+            <div class="stock-chart-container">
+                <img id="stock-chart-image" src="" alt="주가 차트">
+            </div>
+        </section>
+    </div>
+
+    <!-- 푸터 -->
+    <footer>
+        <p>데이터 출처: <a href="https://opendart.fss.or.kr/" target="_blank">금융감독원 전자공시시스템 (OpenDart)</a></p>
+        <p class="note">※ 본 데이터는 참고용이며, 투자 판단의 근거로 사용하지 마세요.</p>
+    </footer>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
-</html>
 
+</html>

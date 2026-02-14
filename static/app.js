@@ -177,13 +177,10 @@ function handleCompanySelect(e) {
     elements.corpCode.textContent = selectedCompany.corp_code;
     elements.stockCode.textContent = selectedCompany.stock_code || '비상장';
 
-    // 주식 차트 표시 (상장사인 경우에만)
+    // 주식 차트 준비 (상장사인 경우에만)
     if (selectedCompany.stock_code) {
         const chartUrl = `https://ssl.pstatic.net/imgfinance/chart/item/area/year3/${selectedCompany.stock_code}.png?sid=${new Date().getTime()}`;
         elements.stockChartImage.src = chartUrl;
-        elements.stockChartSection.style.display = 'block';
-    } else {
-        elements.stockChartSection.style.display = 'none';
     }
 }
 
@@ -241,6 +238,13 @@ function displayFinancialData(data) {
 
     // 차트 컨테이너 표시
     elements.chartsContainer.style.display = 'block';
+
+    // 주식 차트 섹션 표시 여부 결정
+    if (selectedCompany && selectedCompany.stock_code) {
+        elements.stockChartSection.style.display = 'block';
+    } else {
+        elements.stockChartSection.style.display = 'none';
+    }
 
     // 차트로 스크롤
     elements.chartsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
